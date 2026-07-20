@@ -12,11 +12,16 @@ export async function runCliMode() {
                 {value:"agent",label:"Agent Mode"},
                 {value:"plan",label:"Plan Mode"},
                 {value:"ask",label:"Ask Mode"},
-                {value:"back",label:"← Back to main menu"}
+                {value:"back",label:"← Back to main menu"},
+                {value:"exit",label:"Exit Rift"}
             ]
         })
         if(isCancel(mode) || mode==="back"){
             return;
+        }
+        if(mode==="exit"){
+            console.log(chalk.red("Goodbye!"));
+            process.exit(0);
         }
         if(mode==="agent"){
             await runAgentMode();

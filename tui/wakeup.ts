@@ -35,25 +35,25 @@ export async function runWakeup() {
 
     printBannerWithShadow(ascii)
 
-    const mode=await select({
-        message:"Which mode you want to proceed with?",
-        options:[
-            {value:"cli" , label:"CLI"},
-            {value:"telegram" , label:"Telegram"},
-            {value:"exit" , label:"Exit"}
-        ]
-    })
+    while (true) {
+        const mode=await select({
+            message:"Which mode you want to proceed with?",
+            options:[
+                {value:"cli" , label:"CLI"},
+                {value:"telegram" , label:"Telegram"},
+                {value:"exit" , label:"Exit"}
+            ]
+        })
 
-    if(isCancel(mode || mode==="exit")){
-        console.log(chalk.red("Goodbye!"))
-        return;
+        if(isCancel(mode) || mode==="exit"){
+            console.log(chalk.red("Goodbye!"))
+            return;
+        }
+
+        if(mode==="cli"){
+            await runCliMode();
+        }else if(mode==="telegram"){
+            console.log(chalk.green("You have selected Telegram mode."))
+        }
     }
-
-    if(mode==="cli"){
-        console.log(chalk.green("You have selected CLI mode."))
-        await runCliMode(); 
-    }else if(mode==="telegram"){
-        console.log(chalk.green("You have selected Telegram mode."))
-    }
-
 }
