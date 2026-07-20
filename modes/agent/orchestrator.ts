@@ -1,4 +1,4 @@
-import { isCancel, text } from "@clack/prompts";
+import { isCancel, text, spinner } from "@clack/prompts";
 import chalk from "chalk";
 import { defaultAgentConfig } from "./types";
 import { ActionTracker } from "./action-tracker";
@@ -34,33 +34,45 @@ export async function runAgentMode() {
     tools,
   });
 
+  const s = spinner();
+  s.start("Agent is thinking…");
+
+  const toolCallLog: { toolName: string; input: unknown }[] = [];
+
   const result = await agent.generate({
     prompt: goal.trim(),
     onStepFinish: ({ toolCalls }) => {
       for (const tc of toolCalls) {
-        const preview = JSON.stringify(tc.input).slice(0, 160);
-        console.log(
-          chalk.green("  ✓"),
-          chalk.bold(String(tc.toolName)),
-          chalk.dim(preview + (preview.length >= 160 ? "..." : "")),
-        );
+        toolCallLog.push({ toolName: String(tc.toolName), input: tc.input });
+        s.message(`Ran ${chalk.bold(String(tc.toolName))} — continuing…`);
       }
     },
   });
+
+  s.stop("Agent finished.");
+
+  for (const tc of toolCallLog) {
+    const preview = JSON.stringify(tc.input).slice(0, 160);
+    console.log(
+      chalk.green("  ✓"),
+      chalk.bold(tc.toolName),
+      chalk.dim(preview + (preview.length >= 160 ? "..." : "")),
+    );
+  }
 
   if (result.text?.trim()) console.log(renderTerminalMarkdown(result.text));
 
   const ok = await runApprovalFlow(tracker);
   if (!ok) return executor.clearStaging();
 
+  const applySpinner = spinner();
+  applySpinner.start("Applying approved changes…");
   const { errors } = executor.applyApprovedFromTracker();
+  applySpinner.stop(errors.length ? "Applied with errors." : "Applied.");
 
   if (errors.length) {
     console.log(chalk.red("\nSome operations reported errors:\n"));
     for (const e of errors) console.log(chalk.red(`  • ${e}`));
-  }
-  else{
-   console.log(chalk.green('\n✓ Applied.\n'));
   }
 
   executor.clearStaging()
