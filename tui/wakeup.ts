@@ -34,4 +34,24 @@ export async function runWakeup() {
 
     printBannerWithShadow(ascii)
 
+    const mode=await select({
+        message:"Which mode you want to proceed with?",
+        options:[
+            {value:"cli" , label:"CLI"},
+            {value:"telegram" , label:"Telegram"}
+        ]
+    })
+
+    if(isCancel(mode)){
+        console.log(chalk.red("Operation cancelled."))
+        process.exit(0)
+    }
+
+    if(mode==="cli"){
+        console.log(chalk.green("You have selected CLI mode."))
+        // Proceed with CLI mode logic here
+    }else{
+        console.log(chalk.green("You have selected Telegram mode."))
+    }
+
 }
