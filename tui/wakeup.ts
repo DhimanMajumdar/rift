@@ -40,7 +40,6 @@ export async function runWakeup() {
             message:"Which mode you want to proceed with?",
             options:[
                 {value:"cli" , label:"CLI"},
-                {value:"telegram" , label:"Telegram"},
                 {value:"exit" , label:"Exit"}
             ]
         })
@@ -52,8 +51,6 @@ export async function runWakeup() {
 
         if(mode==="cli"){
             await runCliMode();
-        }else if(mode==="telegram"){
-            console.log(chalk.green("You have selected Telegram mode."))
         }
     }
 }
