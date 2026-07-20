@@ -39,15 +39,24 @@ export async function runAgentMode() {
 
   const toolCallLog: { toolName: string; input: unknown }[] = [];
 
-  const result = await agent.generate({
-    prompt: goal.trim(),
-    onStepFinish: ({ toolCalls }) => {
-      for (const tc of toolCalls) {
-        toolCallLog.push({ toolName: String(tc.toolName), input: tc.input });
-        s.message(`Ran ${chalk.bold(String(tc.toolName))} — continuing…`);
-      }
-    },
-  });
+  let result;
+  try {
+    result = await agent.generate({
+      prompt: goal.trim(),
+      onStepFinish: ({ toolCalls }) => {
+        for (const tc of toolCalls) {
+          toolCallLog.push({ toolName: String(tc.toolName), input: tc.input });
+          s.message(`Ran ${chalk.bold(String(tc.toolName))} — continuing…`);
+        }
+      },
+    });
+  } catch (e) {
+    s.stop(chalk.red("Agent failed."));
+    console.log(
+      chalk.red(`  ${e instanceof Error ? e.message : String(e)}\n`),
+    );
+    return executor.clearStaging();
+  }
 
   s.stop("Agent finished.");
 

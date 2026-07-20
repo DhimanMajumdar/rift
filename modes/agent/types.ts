@@ -41,11 +41,35 @@ export const defaultAgentConfig = (): AgentConfig => ({
   codebasePath: process.cwd(),
   maxFileSizeToRead: 1024 * 1024 ,
   excludePatterns: [
+    // JS / TS
     'node_modules',
-    '.git',
     'dist',
     'build',
     '.next',
+    '.nuxt',
+    '.turbo',
+    'coverage',
+    // Python
+    'venv',
+    '.venv',
+    'env',
+    '__pycache__',
+    '.mypy_cache',
+    '.pytest_cache',
+    '.ruff_cache',
+    'site-packages',
+    '*.pyc',
+    // Other ecosystems
+    'target',      // Rust / Java
+    'vendor',      // Go / PHP
+    '.gradle',
+    // VCS / IDE / misc
+    '.git',
+    '.svn',
+    '.idea',
+    '.vscode',
+    '.cache',
+    '.DS_Store',
     '*.log',
     '.env*',
   ],

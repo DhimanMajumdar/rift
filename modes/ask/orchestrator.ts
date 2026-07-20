@@ -107,14 +107,23 @@ export async function runAskMode() {
   const s = spinner();
   s.start("Thinking…");
 
-  const result = await agent.generate({
-    prompt: question.trim(),
-    onStepFinish: ({ toolCalls }) => {
-      for (const tc of toolCalls) {
-        s.message(`Ran ${chalk.bold(String(tc.toolName))} — continuing…`);
-      }
-    },
-  });
+  let result;
+  try {
+    result = await agent.generate({
+      prompt: question.trim(),
+      onStepFinish: ({ toolCalls }) => {
+        for (const tc of toolCalls) {
+          s.message(`Ran ${chalk.bold(String(tc.toolName))} — continuing…`);
+        }
+      },
+    });
+  } catch (e) {
+    s.stop(chalk.red("Ask failed."));
+    console.log(
+      chalk.red(`  ${e instanceof Error ? e.message : String(e)}\n`),
+    );
+    return;
+  }
 
   s.stop("Done.");
 

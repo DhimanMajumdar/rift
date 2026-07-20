@@ -25,7 +25,17 @@ export async function runPlanMode(): Promise<void> {
   const goal = await text({ message: "What is your goal?" });
   if (isCancel(goal) || !goal.trim()) return;
 
-  const plan = await generatePlan(goal);
+  let plan;
+  try {
+    plan = await generatePlan(goal);
+  } catch (e) {
+    console.log(
+      chalk.red(
+        `\nPlanning failed: ${e instanceof Error ? e.message : String(e)}\n`,
+      ),
+    );
+    return;
+  }
 
   printPlan(plan);
 
@@ -59,18 +69,25 @@ export async function runPlanMode(): Promise<void> {
     const s = spinner();
     s.start(`Working on: ${step.title}…`);
 
-    const r = await agent.generate({
-      prompt: stepPrompt(plan.goal, step),
-      onStepFinish: ({ toolCalls }) => {
-        for (const tc of toolCalls) {
-          s.message(`Ran ${chalk.bold(String(tc.toolName))} — continuing…`);
-        }
-      },
-    });
+    try {
+      const r = await agent.generate({
+        prompt: stepPrompt(plan.goal, step),
+        onStepFinish: ({ toolCalls }) => {
+          for (const tc of toolCalls) {
+            s.message(`Ran ${chalk.bold(String(tc.toolName))} — continuing…`);
+          }
+        },
+      });
 
-    s.stop(`Step finished: ${step.title}`);
+      s.stop(`Step finished: ${step.title}`);
 
-    if (r.text) console.log(renderTerminalMarkdown(r.text));
+      if (r.text) console.log(renderTerminalMarkdown(r.text));
+    } catch (e) {
+      s.stop(chalk.red(`Step failed: ${step.title}`));
+      console.log(
+        chalk.red(`  ${e instanceof Error ? e.message : String(e)}\n`),
+      );
+    }
 
   }
 

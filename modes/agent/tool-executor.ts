@@ -58,6 +58,18 @@ function isProbablyTextFile(filePath: string): boolean {
   return TEXT_EXT.has(ext) || ext === "";
 }
 
+// Hard cap on what a single tool call can feed back into the model's
+// context — one runaway list/read must not blow the model's token limit.
+const MAX_TOOL_OUTPUT_CHARS = 40_000;
+
+function clipToolOutput(s: string): string {
+  if (s.length <= MAX_TOOL_OUTPUT_CHARS) return s;
+  return (
+    s.slice(0, MAX_TOOL_OUTPUT_CHARS) +
+    `\n…[truncated: output was ${s.length} chars; narrow your query (non-recursive list, tighter glob, or a specific file)]`
+  );
+}
+
 function globToRegExp(g: string): RegExp {
   const escaped = g
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
@@ -183,7 +195,7 @@ export class ToolExecutor {
       details: { after: text, toolName: "read_file" },
       status: "executed",
     });
-    return text;
+    return clipToolOutput(text);
   }
 
   createFile(rel: string, content: string): string {
@@ -290,7 +302,7 @@ export class ToolExecutor {
       details: { after: out, toolName: "list_files" },
       status: "executed",
     });
-    return out || "(empty)";
+    return clipToolOutput(out) || "(empty)";
   }
 
   searchFiles(
@@ -342,7 +354,7 @@ export class ToolExecutor {
       details: { after: out || "(no matches)", toolName: "search_files" },
       status: "executed",
     });
-    return out || "(no matches)";
+    return clipToolOutput(out) || "(no matches)";
   }
 
   analyzeCodebase(rootRel: string): string {
@@ -440,7 +452,7 @@ export class ToolExecutor {
       details: { after: text, toolName: "read_skill" },
       status: "executed",
     });
-    return text;
+    return clipToolOutput(text);
   }
 
   applyApprovedFromTracker(): { errors: string[] } {

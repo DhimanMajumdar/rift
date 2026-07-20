@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import "./load-env.ts";
 import {runWakeup} from "./tui/wakeup.ts";
 import {Command} from "commander";
 
