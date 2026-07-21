@@ -5,11 +5,13 @@ import { runAskMode } from "./ask/orchestrator";
 import { runPlanMode } from "./plan/orchestrator";
 import { printSessionUsage } from "../ai/usage.ts";
 import { runResumeSessionsFlow, runViewTranscript } from "./session/orchestrator.ts";
+import { runSelectModel, getCurrentModelLabel } from "./model/orchestrator.ts";
 
 export async function runCliMode() {
     await runResumeSessionsFlow();
 
     while(true){
+        console.log(chalk.dim(`Model: ${getCurrentModelLabel()}`));
         const mode=await select({
             message:"Choose CLI sub-mode",
             options:[
@@ -17,6 +19,7 @@ export async function runCliMode() {
                 {value:"plan",label:"Plan Mode"},
                 {value:"ask",label:"Ask Mode"},
                 {value:"transcript",label:"View Transcript"},
+                {value:"model",label:"Select Model"},
                 {value:"back",label:"← Back to main menu"},
                 {value:"exit",label:"Exit Rift"}
             ]
@@ -41,8 +44,11 @@ export async function runCliMode() {
         if(mode==="transcript"){
             await runViewTranscript();
         }
+        if(mode==="model"){
+            await runSelectModel();
+        }
 
-        if(mode!=="agent" && mode!=="ask" && mode!=="plan" && mode!=="transcript"){
+        if(mode!=="agent" && mode!=="ask" && mode!=="plan" && mode!=="transcript" && mode!=="model"){
             console.log(chalk.yellow("The mode is not implemented yet. Please choose another mode."));
         }
     }
