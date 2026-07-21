@@ -1,6 +1,6 @@
 # Rift
 
-**v1** — Rift is a CLI coding agent that stages changes before writing them, shows you exactly what it wants to do, and waits for your approval. Your code, your control.
+Rift is a CLI coding agent that stages changes before writing them, shows you exactly what it wants to do, and waits for your approval. Your code, your control. It started as a v1 foundation and has grown from there — this README keeps both chapters visible so you can see how it evolved.
 
 ## Why "Rift"
 
@@ -13,13 +13,19 @@ Rift lives in your terminal, reads your codebase, and closes that gap. No remote
   <img src="images/two.png" alt="Rift CLI sub-mode menu" width="49%" />
 </p>
 
-## Modes
+---
+
+## v1 — the foundation
+
+Rift is a CLI coding agent that stages changes before writing them, shows you exactly what it wants to do, and waits for your approval. Your code, your control.
+
+### Modes
 
 - **Agent Mode** — give it a goal; it plans and executes using file/shell tools, then asks for approval before applying any changes.
 - **Plan Mode** — drafts a multi-step plan first (with an optional research pass), lets you pick which steps to run, then executes them one by one.
 - **Ask Mode** — read-only Q&A over your codebase (and the web, if configured); can save the answer to a `.md` file.
 
-## How it actually works
+### How it actually works
 
 Rift never writes to disk or runs a shell command as a side effect of the model "deciding" to. Every mode goes through the same pipeline:
 
@@ -39,7 +45,7 @@ LLM tool call → ToolExecutor (staged in memory) → ActionTracker (logs it) �
 
 Plan Mode adds one extra step in front of this: `planner.ts` runs a *read-only* pass over the codebase (and the web, via Firecrawl, if configured) to draft a structured, numbered plan before any mutation tools are even offered to the model.
 
-## Tech stack — what's used and why
+### Tech stack — what's used and why
 
 | Tool | Role |
 |---|---|
@@ -56,7 +62,7 @@ Plan Mode adds one extra step in front of this: `planner.ts` runs a *read-only* 
 | [`chalk`](https://www.npmjs.com/package/chalk) | Terminal text coloring throughout the CLI. |
 | [`figlet`](https://www.npmjs.com/package/figlet) | Renders the ASCII-art "rift" banner on startup. |
 
-## Project structure
+### Project structure
 
 ```
 index.ts                     — CLI entrypoint (commander), defines the `wakeup` command
@@ -69,20 +75,71 @@ modes/
   cli.ts                     — CLI submenu (Agent / Plan / Ask / Back / Exit)
   agent/
     orchestrator.ts          — Agent Mode: goal → tool loop → approval → apply
-    agent-tools.ts           — full read/write tool set exposed to Agent Mode
-    tool-executor.ts         — the sandboxed staging engine everything else is built on
-    action-tracker.ts        — in-memory log of every action and its approval status
-    approval.ts              — interactive review flow (diff view, accept/reject)
-    diff-view.ts             — unified diff generation for the approval UI
-    types.ts                 — shared config/action types + default sandbox config
+    agent-tools.ts            — full read/write tool set exposed to Agent Mode
+    tool-executor.ts          — the sandboxed staging engine everything else is built on
+    action-tracker.ts         — in-memory log of every action and its approval status
+    approval.ts               — interactive review flow (diff view, accept/reject)
+    diff-view.ts               — unified diff generation for the approval UI
+    types.ts                  — shared config/action types + default sandbox config
   ask/
-    orchestrator.ts          — Ask Mode: read-only Q&A, optional save-to-file
+    orchestrator.ts           — Ask Mode: read-only Q&A, optional save-to-file
   plan/
-    orchestrator.ts          — Plan Mode: runs approved steps through the tool loop
+    orchestrator.ts           — Plan Mode: runs approved steps through the tool loop
     planner.ts                — drafts the structured plan (read-only + optional web research)
-    selection.ts              — lets you pick which drafted steps to run
-    web-tools.ts               — Firecrawl-backed web_search / web_crawl / fetch_url tools
+    selection.ts               — lets you pick which drafted steps to run
+    web-tools.ts                — Firecrawl-backed web_search / web_crawl / fetch_url tools
 ```
+
+This is v1 — the foundation: staged execution, sandboxing, and the three core modes.
+
+---
+
+## v2 — streaming, patches, cost tracking, sessions, model selection
+
+Built directly on top of v1's staged-execution pipeline, v2 adds:
+
+- **Live streaming.** Agent, Plan, and Ask mode now stream the model's response token-by-token, with tool calls, results, and errors printed inline as they happen — instead of a spinner that sits still and dumps everything at the end.
+- **Surgical edits (`patch_file`).** A `str_replace`-style tool alongside `modify_file`: give it an exact snippet and its replacement instead of the whole file. Requires the snippet to be unique in the file (or pass `replace_all`), so it fails loudly instead of editing the wrong spot. The agent is instructed to prefer this for small changes.
+- **Token & cost tracking.** Every run shows real token counts and USD cost (via OpenRouter's usage accounting), plus a running session total shown after each run and again on exit.
+- **Session persistence & crash recovery.** Staged-but-unreviewed changes are saved to disk before you ever see the approval screen, so an interrupted review is resumable on your next launch instead of silently lost.
+- **Transcript log.** Every applied change is recorded with its diff in `.rift/transcript.jsonl`, browsable from a new **View Transcript** menu item.
+- **Model selection.** Pick any tool-calling-capable model from OpenRouter's live catalog (or type one manually) right from a new **Select Model** menu item — no more editing `.env` to try a different model. Your choice is saved per-workspace in `.rift/config.json` and takes priority over the `.env` default.
+
+### The pipeline, updated
+
+v1's pipeline gained two steps — a save right before review, and a durable record right after apply:
+
+```
+LLM tool call → ToolExecutor (staged) → ActionTracker (logs it) → session saved →
+your approval → written to disk → transcript recorded
+```
+
+- **Session save** (`stageSessionForReview()` in `modes/session/session-flow.ts`) writes every staged, unreviewed change to `.rift/sessions/` right before the approval screen. If the process is killed mid-review, the next launch detects it and offers **Resume / Discard / Skip** — resuming replays the exact same diffs without re-running the LLM.
+- **Transcript recording** (`recordAppliedTranscript()`, same file) appends what was actually written to `.rift/transcript.jsonl` once apply finishes, whether it succeeded or hit errors.
+- Sandboxing's `excludePatterns` now also covers `.rift` itself, so the agent can't read or edit its own bookkeeping.
+
+### New files in v2
+
+```
+ai/
+  model-config.ts            — resolves/persists the active model (.rift/config.json) + fetches OpenRouter's live catalog
+  usage.ts                   — per-run and session-wide token/cost tracking and formatting
+modes/
+  agent/
+    stream-run.ts             — consumes an agent's live token stream, printing deltas/tool calls and extracting usage
+  session/
+    store.ts                  — reads/writes .rift/sessions/*.json and .rift/transcript.jsonl
+    session-flow.ts            — stage-before-review, finalize-after-review, and transcript-recording helpers used by all three modes
+    orchestrator.ts            — resume-pending-sessions flow (on CLI startup) and the View Transcript viewer
+  model/
+    orchestrator.ts            — the Select Model picker (browse free / browse all / enter manually)
+```
+
+`agent-tools.ts` gained the `patch_file` tool definition, `action-tracker.ts` gained the ability to hydrate from a saved session, and `cli.ts`'s submenu grew two entries (`View Transcript`, `Select Model`) — everything else from v1's project structure is unchanged.
+
+This is v2 — everything from v1, plus a faster feel, safer small edits, real cost visibility, and nothing gets lost if the process dies mid-review. Still on the roadmap: multi-turn conversation (so you can refine a run instead of starting over), git integration with an undo command, a verify-and-repair loop that runs your tests before asking for approval, and a live per-tool permission prompt (Allow Once / Allow for Session / Deny) as an alternative to the batch diff review. Rift is very much alive and actively growing.
+
+---
 
 ## Setup
 
@@ -101,8 +158,10 @@ cp .env.example .env
 | Variable | Required | Purpose |
 |---|---|---|
 | `OPENROUTER_API_KEY` | Yes | Auth for [OpenRouter](https://openrouter.ai/keys), used to reach the model |
-| `OPENROUTER_DEFAULT_MODEL` | Yes | Model id to use, e.g. `openai/gpt-4o-mini` |
+| `OPENROUTER_DEFAULT_MODEL` | No | Fallback model id if you haven't picked one via the CLI's **Select Model** menu (v2), e.g. `openai/gpt-4o-mini` |
 | `FIRECRAWL_API_KEY` | No | Enables web search/crawl tools in Plan/Ask mode |
+
+Rift keeps its own bookkeeping — pending sessions, the applied-changes transcript, and your selected model — in a `.rift/` folder inside whatever workspace you run it in. It's created automatically, excluded from the agent's own file access, and gitignored; nothing in it is meant to be committed.
 
 ## Run
 
@@ -110,7 +169,7 @@ cp .env.example .env
 bun run index.ts wakeup
 ```
 
-This shows the banner and the main menu (`CLI` / `Exit`). Choose `CLI` to pick a mode (`Agent` / `Plan` / `Ask`).
+This shows the banner and the main menu (`CLI` / `Exit`). Choose `CLI` to pick a mode (`Agent` / `Plan` / `Ask`), view the applied-changes transcript, or switch models. If Rift finds an unfinished session from a previous run (e.g. the process was killed mid-review), it'll offer to resume it before showing the menu.
 
 To install it as a global `rift` command instead:
 
@@ -118,7 +177,3 @@ To install it as a global `rift` command instead:
 bun link
 rift wakeup
 ```
-
-## What's next
-
-This is v1 — the foundation: staged execution, sandboxing, and the three core modes. There's a lot more on the way. Rift is very much alive and actively growing.
