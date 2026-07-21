@@ -6,8 +6,8 @@ import { ToolExecutor } from "./tool-executor";
 import { createAgentTools } from "./agent-tools";
 import { stepCountIs, ToolLoopAgent } from "ai";
 import { getAgentModel } from "../../ai";
-import { renderTerminalMarkdown } from "../../tui/terminal-md";
 import { runApprovalFlow } from "./approval";
+import { consumeAgentStream } from "./stream-run";
 
 export async function runAgentMode() {
   console.log(chalk.bold("\n Agent Mode\n"));
@@ -30,46 +30,24 @@ export async function runAgentMode() {
     instructions: [
       `Workspace root: ${config.codebasePath}`,
       "All mutations are staged until approval.",
+      "Prefer patch_file for small, targeted edits to existing files; use modify_file only for full-file rewrites.",
     ].join("\n"),
     tools,
   });
 
-  const s = spinner();
-  s.start("Agent is thinking…");
+  console.log(chalk.dim("Agent is thinking…\n"));
 
-  const toolCallLog: { toolName: string; input: unknown }[] = [];
-
-  let result;
   try {
-    result = await agent.generate({
-      prompt: goal.trim(),
-      onStepFinish: ({ toolCalls }) => {
-        for (const tc of toolCalls) {
-          toolCallLog.push({ toolName: String(tc.toolName), input: tc.input });
-          s.message(`Ran ${chalk.bold(String(tc.toolName))} — continuing…`);
-        }
-      },
-    });
+    const streamResult = await agent.stream({ prompt: goal.trim() });
+    await consumeAgentStream(streamResult.stream);
   } catch (e) {
-    s.stop(chalk.red("Agent failed."));
     console.log(
-      chalk.red(`  ${e instanceof Error ? e.message : String(e)}\n`),
+      chalk.red(`\nAgent failed: ${e instanceof Error ? e.message : String(e)}\n`),
     );
     return executor.clearStaging();
   }
 
-  s.stop("Agent finished.");
-
-  for (const tc of toolCallLog) {
-    const preview = JSON.stringify(tc.input).slice(0, 160);
-    console.log(
-      chalk.green("  ✓"),
-      chalk.bold(tc.toolName),
-      chalk.dim(preview + (preview.length >= 160 ? "..." : "")),
-    );
-  }
-
-  if (result.text?.trim()) console.log(renderTerminalMarkdown(result.text));
+  console.log(chalk.dim("\nAgent finished.\n"));
 
   const ok = await runApprovalFlow(tracker);
   if (!ok) return executor.clearStaging();

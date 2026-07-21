@@ -219,6 +219,18 @@ export class ToolExecutor {
     return `Staged new file: ${key}`;
   }
 
+  private stageFileModify(rel: string, before: string, after: string): string {
+    const key = this.norm(rel);
+    this.overlay.set(key, after);
+    this.tracker.log({
+      type: "file_modify",
+      path: key,
+      details: { before, after },
+      status: "pending",
+    });
+    return `Staged update: ${key}`;
+  }
+
   modifyFile(rel: string, content: string): string {
     if (!this.config.tools.allowFileModification)
       throw new Error("File modification disabled");
@@ -226,15 +238,45 @@ export class ToolExecutor {
     const before = this.getEffectiveText(rel);
     if (before === undefined)
       throw new Error(`modify_file: file not found: ${rel}`);
-    const key = this.norm(rel);
-    this.overlay.set(key, content);
-    this.tracker.log({
-      type: "file_modify",
-      path: key,
-      details: { before, after: content },
-      status: "pending",
-    });
-    return `Staged update: ${key}`;
+    return this.stageFileModify(rel, before, content);
+  }
+
+  patchFile(
+    rel: string,
+    oldString: string,
+    newString: string,
+    replaceAll = false,
+  ): string {
+    if (!this.config.tools.allowFileModification)
+      throw new Error("File modification disabled");
+    this.assertNotExcluded(rel, "patch_file");
+    const before = this.getEffectiveText(rel);
+    if (before === undefined)
+      throw new Error(`patch_file: file not found: ${rel}`);
+    if (oldString === "")
+      throw new Error("patch_file: old_string must be non-empty");
+    if (oldString === newString)
+      throw new Error(
+        "patch_file: old_string and new_string are identical",
+      );
+
+    const occurrences = before.split(oldString).length - 1;
+    if (occurrences === 0)
+      throw new Error(
+        `patch_file: old_string not found in ${rel}. It must match the file's current content exactly, including whitespace.`,
+      );
+    if (occurrences > 1 && !replaceAll)
+      throw new Error(
+        `patch_file: old_string is not unique in ${rel} (${occurrences} matches). Include more surrounding context to make it unique, or pass replace_all: true to replace every match.`,
+      );
+
+    const after = replaceAll
+      ? before.split(oldString).join(newString)
+      : before.slice(0, before.indexOf(oldString)) +
+        newString +
+        before.slice(before.indexOf(oldString) + oldString.length);
+
+    return this.stageFileModify(rel, before, after);
   }
 
   deleteFile(rel: string): string {

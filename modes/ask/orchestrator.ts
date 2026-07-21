@@ -1,14 +1,14 @@
 import chalk from "chalk";
-import { confirm, isCancel, spinner, text } from "@clack/prompts";
+import { confirm, isCancel, text } from "@clack/prompts";
 import { ToolLoopAgent, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import { getAgentModel } from "../../ai/ai.config.ts";
 import { ActionTracker } from "../agent/action-tracker.ts";
 import { ToolExecutor } from "../agent/tool-executor.ts";
 import { defaultAgentConfig } from "../agent/types.ts";
-import { renderTerminalMarkdown } from "../../tui/terminal-md.ts";
 import { runApprovalFlow } from "../agent/approval.ts";
 import { createWebTools } from "../plan/web-tools.ts";
+import { consumeAgentStream } from "../agent/stream-run.ts";
 
 
 function createAskTools(executor: ToolExecutor) {
@@ -104,31 +104,22 @@ export async function runAskMode() {
     tools,
   });
 
-  const s = spinner();
-  s.start("Thinking…");
+  console.log(chalk.dim("Thinking…\n"));
 
-  let result;
+  let run;
   try {
-    result = await agent.generate({
-      prompt: question.trim(),
-      onStepFinish: ({ toolCalls }) => {
-        for (const tc of toolCalls) {
-          s.message(`Ran ${chalk.bold(String(tc.toolName))} — continuing…`);
-        }
-      },
-    });
+    const streamResult = await agent.stream({ prompt: question.trim() });
+    run = await consumeAgentStream(streamResult.stream);
   } catch (e) {
-    s.stop(chalk.red("Ask failed."));
     console.log(
-      chalk.red(`  ${e instanceof Error ? e.message : String(e)}\n`),
+      chalk.red(`\nAsk failed: ${e instanceof Error ? e.message : String(e)}\n`),
     );
     return;
   }
 
-  s.stop("Done.");
-
-  const answer = result.text?.trim() || "(no answer)";
-  console.log("\n" + renderTerminalMarkdown(answer) + "\n");
+  const answer = run.text || "(no answer)";
+  if (!run.text) console.log(chalk.dim(answer));
+  console.log();
 
   const wantsSave = await confirm({
     message:"Save this answer to a .md file in the current directory?",

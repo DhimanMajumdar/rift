@@ -25,12 +25,31 @@ export function createAgentTools(executor: ToolExecutor) {
 
     modify_file: tool({
       description:
-        "Stage a full-file replacement for an existing file (pending approval).",
+        "Stage a full-file replacement for an existing file (pending approval). Prefer patch_file for small, targeted edits.",
       inputSchema: z.object({
         path: z.string(),
         content: z.string().describe("Complete new file contents"),
       }),
       execute: async ({ path: p, content }) => executor.modifyFile(p, content),
+    }),
+
+    patch_file: tool({
+      description:
+        "Stage a surgical edit to an existing file by replacing an exact snippet of its current content with new text (pending approval). Cheaper and safer than modify_file for small changes — no need to reproduce the whole file. old_string must match the file's current content exactly (including whitespace) and must be unique unless replace_all is set.",
+      inputSchema: z.object({
+        path: z.string(),
+        old_string: z
+          .string()
+          .describe("Exact, unique snippet of the file's current content to replace"),
+        new_string: z.string().describe("Replacement text"),
+        replace_all: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe("Replace every occurrence instead of requiring a unique match"),
+      }),
+      execute: async ({ path: p, old_string, new_string, replace_all }) =>
+        executor.patchFile(p, old_string, new_string, replace_all),
     }),
 
     delete_file: tool({
