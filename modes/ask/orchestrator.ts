@@ -10,6 +10,7 @@ import { runApprovalFlow } from "../agent/approval.ts";
 import { createWebTools } from "../plan/web-tools.ts";
 import { consumeAgentStream } from "../agent/stream-run.ts";
 import { formatUsageLine, formatSessionUsageLine } from "../../ai/usage.ts";
+import { stageSessionForReview, finalizeSession, recordAppliedTranscript } from "../session/session-flow.ts";
 
 
 function createAskTools(executor: ToolExecutor) {
@@ -143,9 +144,17 @@ export async function runAskMode() {
   if(isCancel(filename)) return;
 
   executor.createFile(filename , asMd(question , answer));
-  const ok = await runApprovalFlow(tracker);
-  if(!ok) return executor.clearStaging();
 
-  executor.applyApprovedFromTracker();
+  const sessionId = stageSessionForReview("ask", question.trim(), config.codebasePath, tracker);
+
+  const ok = await runApprovalFlow(tracker);
+  if(!ok) {
+    finalizeSession(config.codebasePath, sessionId);
+    return executor.clearStaging();
+  }
+
+  const { errors } = executor.applyApprovedFromTracker();
+  recordAppliedTranscript("ask", question.trim(), config.codebasePath, tracker, errors);
+  finalizeSession(config.codebasePath, sessionId);
   executor.clearStaging();
 }

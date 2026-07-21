@@ -64,6 +64,7 @@ export const defaultAgentConfig = (): AgentConfig => ({
     'vendor',      // Go / PHP
     '.gradle',
     // VCS / IDE / misc
+    '.rift',
     '.git',
     '.svn',
     '.idea',

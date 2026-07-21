@@ -2,7 +2,11 @@ import type { ActionLog, ActionStatus } from "./types";
 import { isMutationType } from "./types";
 
 export class ActionTracker {
-  private actions: ActionLog[] = [];
+  private actions: ActionLog[];
+
+  constructor(initialActions: ActionLog[] = []) {
+    this.actions = [...initialActions];
+  }
 
   log(
     entry: Omit<ActionLog, "id" | "timestamp"> & {

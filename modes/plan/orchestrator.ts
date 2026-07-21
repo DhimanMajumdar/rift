@@ -9,6 +9,7 @@ import { defaultAgentConfig } from "../agent/types.ts";
 import { runApprovalFlow } from "../agent/approval.ts";
 import { consumeAgentStream } from "../agent/stream-run.ts";
 import { formatUsageLine, formatSessionUsageLine, sumUsage, type RunUsage } from "../../ai/usage.ts";
+import { stageSessionForReview, finalizeSession, recordAppliedTranscript } from "../session/session-flow.ts";
 import { generatePlan } from "./planner.ts";
 import { printPlan, selectSteps } from "./selection.ts";
 import type { PlanStep } from "./types.ts";
@@ -92,11 +93,18 @@ export async function runPlanMode(): Promise<void> {
   console.log(chalk.dim(formatUsageLine(sumUsage(stepUsages), "Plan total")));
   console.log(formatSessionUsageLine() + "\n");
 
+  const sessionId = stageSessionForReview("plan", plan.goal, config.codebasePath, tracker);
+
   const ok = await runApprovalFlow(tracker);
 
-  if(!ok) return executor.clearStaging();
+  if(!ok) {
+    finalizeSession(config.codebasePath, sessionId);
+    return executor.clearStaging();
+  }
 
-   const { errors } = executor.applyApprovedFromTracker();
+  const { errors } = executor.applyApprovedFromTracker();
+  recordAppliedTranscript("plan", plan.goal, config.codebasePath, tracker, errors);
+  finalizeSession(config.codebasePath, sessionId);
   if (errors.length) {
     console.log(chalk.red('\nSome operations reported errors:\n'));
     for (const e of errors) console.log(chalk.red(`  • ${e}`));

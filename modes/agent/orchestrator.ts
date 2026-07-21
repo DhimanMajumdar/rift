@@ -9,6 +9,7 @@ import { getAgentModel } from "../../ai";
 import { runApprovalFlow } from "./approval";
 import { consumeAgentStream } from "./stream-run";
 import { formatUsageLine, formatSessionUsageLine } from "../../ai/usage.ts";
+import { stageSessionForReview, finalizeSession, recordAppliedTranscript } from "../session/session-flow.ts";
 
 export async function runAgentMode() {
   console.log(chalk.bold("\n Agent Mode\n"));
@@ -50,13 +51,20 @@ export async function runAgentMode() {
     return executor.clearStaging();
   }
 
+  const sessionId = stageSessionForReview("agent", goal.trim(), config.codebasePath, tracker);
+
   const ok = await runApprovalFlow(tracker);
-  if (!ok) return executor.clearStaging();
+  if (!ok) {
+    finalizeSession(config.codebasePath, sessionId);
+    return executor.clearStaging();
+  }
 
   const applySpinner = spinner();
   applySpinner.start("Applying approved changes…");
   const { errors } = executor.applyApprovedFromTracker();
   applySpinner.stop(errors.length ? "Applied with errors." : "Applied.");
+  recordAppliedTranscript("agent", goal.trim(), config.codebasePath, tracker, errors);
+  finalizeSession(config.codebasePath, sessionId);
 
   if (errors.length) {
     console.log(chalk.red("\nSome operations reported errors:\n"));
