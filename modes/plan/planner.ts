@@ -15,6 +15,12 @@ import { ToolExecutor } from "../agent/tool-executor.ts";
 import { defaultAgentConfig } from "../agent/types.ts";
 import type { PlanStep } from "./types.ts";
 import { createWebTools } from "./web-tools.ts";
+import {
+  extractCostFromSteps,
+  formatUsageLine,
+  recordUsage,
+  usageFromTotals,
+} from "../../ai/usage.ts";
 
 const planSchema = z.object({
   researchSummary: z.string().optional(),
@@ -138,7 +144,9 @@ export async function generatePlan(goal: string) {
     },
   });
 
-  s.stop("Plan drafted.");
+  const usage = usageFromTotals(result.usage, extractCostFromSteps(result.steps));
+  recordUsage(usage);
+  s.stop(`Plan drafted. ${formatUsageLine(usage)}`);
 
   const validated = planSchema.parse(result.output);
 

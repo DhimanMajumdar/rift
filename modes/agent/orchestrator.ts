@@ -8,6 +8,7 @@ import { stepCountIs, ToolLoopAgent } from "ai";
 import { getAgentModel } from "../../ai";
 import { runApprovalFlow } from "./approval";
 import { consumeAgentStream } from "./stream-run";
+import { formatUsageLine, formatSessionUsageLine } from "../../ai/usage.ts";
 
 export async function runAgentMode() {
   console.log(chalk.bold("\n Agent Mode\n"));
@@ -39,15 +40,15 @@ export async function runAgentMode() {
 
   try {
     const streamResult = await agent.stream({ prompt: goal.trim() });
-    await consumeAgentStream(streamResult.stream);
+    const run = await consumeAgentStream(streamResult);
+    console.log(chalk.dim(`\nAgent finished. ${formatUsageLine(run.usage)}`));
+    console.log(formatSessionUsageLine() + "\n");
   } catch (e) {
     console.log(
       chalk.red(`\nAgent failed: ${e instanceof Error ? e.message : String(e)}\n`),
     );
     return executor.clearStaging();
   }
-
-  console.log(chalk.dim("\nAgent finished.\n"));
 
   const ok = await runApprovalFlow(tracker);
   if (!ok) return executor.clearStaging();

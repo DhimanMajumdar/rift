@@ -8,5 +8,7 @@ export function getAgentModel() {
   const modelId = process.env.OPENROUTER_DEFAULT_MODEL;
   if (!modelId) throw new Error("OPENROUTER_DEFAULT_MODEL is not set");
 
-  return provider(modelId);
+  // Ask OpenRouter to include per-call cost accounting in the response so
+  // we can surface real USD cost, not just token counts.
+  return provider(modelId, { usage: { include: true } });
 }

@@ -9,6 +9,7 @@ import { defaultAgentConfig } from "../agent/types.ts";
 import { runApprovalFlow } from "../agent/approval.ts";
 import { createWebTools } from "../plan/web-tools.ts";
 import { consumeAgentStream } from "../agent/stream-run.ts";
+import { formatUsageLine, formatSessionUsageLine } from "../../ai/usage.ts";
 
 
 function createAskTools(executor: ToolExecutor) {
@@ -109,7 +110,7 @@ export async function runAskMode() {
   let run;
   try {
     const streamResult = await agent.stream({ prompt: question.trim() });
-    run = await consumeAgentStream(streamResult.stream);
+    run = await consumeAgentStream(streamResult);
   } catch (e) {
     console.log(
       chalk.red(`\nAsk failed: ${e instanceof Error ? e.message : String(e)}\n`),
@@ -119,7 +120,8 @@ export async function runAskMode() {
 
   const answer = run.text || "(no answer)";
   if (!run.text) console.log(chalk.dim(answer));
-  console.log();
+  console.log(chalk.dim(`\n${formatUsageLine(run.usage)}`));
+  console.log(formatSessionUsageLine() + "\n");
 
   const wantsSave = await confirm({
     message:"Save this answer to a .md file in the current directory?",

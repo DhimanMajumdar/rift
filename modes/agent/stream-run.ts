@@ -1,4 +1,10 @@
 import chalk from "chalk";
+import {
+  extractCostFromSteps,
+  recordUsage,
+  usageFromTotals,
+  type RunUsage,
+} from "../../ai/usage.ts";
 
 export interface StreamedToolCall {
   toolName: string;
@@ -8,6 +14,17 @@ export interface StreamedToolCall {
 export interface StreamedRun {
   text: string;
   toolCalls: StreamedToolCall[];
+  usage: RunUsage;
+}
+
+interface StreamableResult {
+  stream: AsyncIterable<any>;
+  usage: PromiseLike<{
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  }>;
+  steps: PromiseLike<ReadonlyArray<{ providerMetadata?: any }>>;
 }
 
 function errMessage(e: unknown): string {
@@ -16,9 +33,9 @@ function errMessage(e: unknown): string {
 
 // Consumes an agent's live token stream, printing text deltas as they
 // arrive and tool calls/results/errors inline, while accumulating the
-// final text and tool-call log for callers that need them afterward.
+// final text, tool-call log, and token/cost usage for callers afterward.
 export async function consumeAgentStream(
-  stream: AsyncIterable<any>,
+  result: StreamableResult,
 ): Promise<StreamedRun> {
   const toolCalls: StreamedToolCall[] = [];
   let text = "";
@@ -31,7 +48,7 @@ export async function consumeAgentStream(
     }
   };
 
-  for await (const part of stream) {
+  for await (const part of result.stream) {
     switch (part.type) {
       case "text-delta": {
         if (part.text) {
@@ -74,5 +91,10 @@ export async function consumeAgentStream(
   }
 
   ensureNewline();
-  return { text: text.trim(), toolCalls };
+
+  const [rawUsage, steps] = await Promise.all([result.usage, result.steps]);
+  const usage = usageFromTotals(rawUsage, extractCostFromSteps(steps));
+  recordUsage(usage);
+
+  return { text: text.trim(), toolCalls, usage };
 }

@@ -8,6 +8,7 @@ import { createAgentTools } from "../agent/agent-tools.ts";
 import { defaultAgentConfig } from "../agent/types.ts";
 import { runApprovalFlow } from "../agent/approval.ts";
 import { consumeAgentStream } from "../agent/stream-run.ts";
+import { formatUsageLine, formatSessionUsageLine, sumUsage, type RunUsage } from "../../ai/usage.ts";
 import { generatePlan } from "./planner.ts";
 import { printPlan, selectSteps } from "./selection.ts";
 import type { PlanStep } from "./types.ts";
@@ -58,6 +59,8 @@ export async function runPlanMode(): Promise<void> {
     ...createWebTools(tracker)
   };
 
+  const stepUsages: RunUsage[] = [];
+
   for (const step of selected) {
     console.log(chalk.bold(`\n🔧 ${step.title}\n`));
 
@@ -71,8 +74,11 @@ export async function runPlanMode(): Promise<void> {
       const streamResult = await agent.stream({
         prompt: stepPrompt(plan.goal, step),
       });
-      await consumeAgentStream(streamResult.stream);
-      console.log(chalk.dim(`\nStep finished: ${step.title}\n`));
+      const run = await consumeAgentStream(streamResult);
+      stepUsages.push(run.usage);
+      console.log(
+        chalk.dim(`\nStep finished: ${step.title} — ${formatUsageLine(run.usage)}\n`),
+      );
     } catch (e) {
       console.log(
         chalk.red(
@@ -82,6 +88,9 @@ export async function runPlanMode(): Promise<void> {
     }
 
   }
+
+  console.log(chalk.dim(formatUsageLine(sumUsage(stepUsages), "Plan total")));
+  console.log(formatSessionUsageLine() + "\n");
 
   const ok = await runApprovalFlow(tracker);
 

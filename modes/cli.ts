@@ -3,6 +3,7 @@ import {select , isCancel} from "@clack/prompts";
 import { runAgentMode } from "./agent/orchestrator";
 import { runAskMode } from "./ask/orchestrator";
 import { runPlanMode } from "./plan/orchestrator";
+import { printSessionUsage } from "../ai/usage.ts";
 
 export async function runCliMode() {
     while(true){
@@ -20,6 +21,7 @@ export async function runCliMode() {
             return;
         }
         if(mode==="exit"){
+            printSessionUsage();
             console.log(chalk.red("Goodbye!"));
             process.exit(0);
         }

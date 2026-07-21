@@ -2,6 +2,7 @@ import {select , isCancel} from "@clack/prompts";
 import chalk from "chalk"
 import figlet from "figlet";
 import { runCliMode } from "../modes/cli";
+import { printSessionUsage } from "../ai/usage.ts";
 
 
 const BANNER_FONT = 'ANSI Shadow';
@@ -45,6 +46,7 @@ export async function runWakeup() {
         })
 
         if(isCancel(mode) || mode==="exit"){
+            printSessionUsage();
             console.log(chalk.red("Goodbye!"))
             return;
         }
